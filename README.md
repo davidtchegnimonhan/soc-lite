@@ -41,7 +41,7 @@ Building this project publicly over 30 days.
 - Weekly LinkedIn updates
 - Full documentation
 
-Follow progress: [LinkedIn Profile]
+Follow progress: www.linkedin.com/in/david-tchegnimonhan
 
 ## License
 
