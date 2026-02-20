@@ -56,10 +56,15 @@ cover/
 *.pot
 
 # Django stuff:
-*.log
+#*.log
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
+
+# Exceptions: keep test datasets
+!logs/sample.log
+!data/*.log
+!data/*.json
 
 # Flask stuff:
 instance/
