@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+    <div class="stat-card">
+        <h3>Total Logs</h3>
+        <p class="stat-value" id="total-logs">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Attacks Detected</h3>
+        <p class="stat-value" id="total-attacks">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Unique IPs</h3>
+        <p class="stat-value" id="unique-ips">-</p>
+    </div>
+    <div class="stat-card">
+        <h3>Time Range</h3>
+        <p class="stat-value" id="time-range">-</p>
+    </div>
+</div>
+
+<div style="background: #16213e; padding: 20px; border-radius: 8px;">
+    <h2>Recent Attacks</h2>
+    <div id="attacks-list">Loading...</div>
+</div>
+
+<style>
+    .stat-card {
+        background: #16213e;
+        padding: 25px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .stat-card h3 {
+        color: #888;
+        font-size: 0.9em;
+        margin-bottom: 10px;
+    }
+    .stat-value {
+        font-size: 2.5em;
+        font-weight: bold;
+        color: #0f3460;
+    }
+</style>
+
+<script>
+    // Fetch stats
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('total-logs').textContent = data.total_logs.toLocaleString();
+            document.getElementById('total-attacks').textContent = data.total_attacks;
+            document.getElementById('unique-ips').textContent = data.unique_ips;
+            document.getElementById('time-range').textContent = data.time_range;
+        });
+    
+    // Fetch attacks
+    fetch('/api/attacks')
+        .then(r => r.json())
+        .then(data => {
+            const list = document.getElementById('attacks-list');
+            if (data.attacks.length === 0) {
+                list.innerHTML = '<p style="color: #888;">No attacks detected</p>';
+            } else {
+                list.innerHTML = data.attacks.map(a => 
+                    `<div>${a.ip} - ${a.attempts} attempts</div>`
+                ).join('');
+            }
+        });
+</script>
+{% endblock %}

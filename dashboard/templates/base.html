@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOC-Lite Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        header { background: #16213e; padding: 20px; margin-bottom: 30px; border-radius: 8px; }
+        h1 { color: #0f3460; }
+        .tagline { color: #888; margin-top: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🛡️ SOC-Lite</h1>
+            <p class="tagline">Lightweight SIEM for SMEs</p>
+        </header>
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>
