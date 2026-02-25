@@ -1,0 +1,10 @@
+{
+  "total_logs": 5160,
+  "ground_truth_attacks": 2,
+  "detected_attacks": 2,
+  "true_positives": 2,
+  "false_positives": 0,
+  "false_negatives": 0,
+  "precision": 1.0,
+  "recall": 1.0
+}
