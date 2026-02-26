@@ -75,3 +75,15 @@ On sample logs:
 - 429 failed auth requests
 - 7 potential attacks detected
 - All LOW severity (threshold=3)
+
+## Week 1 Complete ✅
+
+### Final Metrics
+- Lines of code: ~800
+- Tests: 11 passing  
+- Detection: 100% precision, 100% recall
+
+### Week 2 Started
+- Dashboard live at localhost:5000
+- Flask + HTML/CSS
+- API endpoints functional
