@@ -16,6 +16,15 @@ from detection.brute_force_detector import detect_brute_force, get_summary
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'soc-lite-dev-key'
 
+# Load data at startup
+print("📊 Loading log data...")
+parser = ApacheLogParser()
+df = parser.parse_file('data/attack_dataset.log', verbose=False)
+attacks_df = detect_brute_force(df, threshold=10, window_minutes=5)
+summary = get_summary(attacks_df)
+
+print(f"✅ Loaded {len(df)} logs, detected {summary['total_attacks']} attacks")
+
 
 @app.route('/')
 def index():
@@ -32,12 +41,11 @@ def dashboard():
 @app.route('/api/stats')
 def api_stats():
     """Get general statistics"""
-    # TODO: Connect to real data
     stats = {
-        'total_logs': 5160,
-        'total_attacks': 2,
-        'unique_ips': 120,
-        'time_range': '24 hours'
+        'total_logs': len(df),
+        'total_attacks': summary['total_attacks'],
+        'unique_ips': int(df['ip'].nunique()),
+        'time_range': '6 hours'
     }
     return jsonify(stats)
 
@@ -45,14 +53,41 @@ def api_stats():
 @app.route('/api/attacks')
 def api_attacks():
     """Get detected attacks"""
-    # TODO: Connect to real detection
+    if attacks_df.empty:
+        return jsonify({'attacks': []})
+    
     attacks = []
+    for _, row in attacks_df.iterrows():
+        attacks.append({
+            'ip': row['ip'],
+            'attempts': int(row['attempts']),
+            'severity': row['severity'],
+            'endpoints': row['endpoints'],
+            'first_seen': str(row['first_seen']),
+            'last_seen': str(row['last_seen'])
+        })
+    
     return jsonify({'attacks': attacks})
 
 
+@app.route('/api/timeline')
+def api_timeline():
+    """Get attack timeline data for charts"""
+    if attacks_df.empty:
+        return jsonify({'labels': [], 'data': []})
+    
+    # Simple timeline: attacks by IP
+    timeline = {
+        'labels': attacks_df['ip'].tolist(),
+        'data': attacks_df['attempts'].tolist()
+    }
+    return jsonify(timeline)
+
+
 if __name__ == '__main__':
-    print("🛡️  SOC-Lite Dashboard")
+    print("\n🛡️  SOC-Lite Dashboard")
     print("=" * 40)
     print("Starting server...")
     print("Access: http://localhost:5000")
+    print("=" * 40)
     app.run(debug=True, host='0.0.0.0', port=5000)
