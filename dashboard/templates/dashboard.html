@@ -1,6 +1,58 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- Filters Section -->
+<div style="background: #16213e; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+    <h2 style="margin-bottom: 15px;">🔍 Filters</h2>
+    <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+        <div>
+            <label style="display: block; color: #888; margin-bottom: 5px; font-size: 0.9em;">Severity</label>
+            <select id="severity-filter" style="padding: 10px; border-radius: 5px; border: 1px solid #0f3460; background: #1a1a2e; color: #fff; min-width: 150px;">
+                <option value="ALL">All Severities</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+            </select>
+        </div>
+        
+        <div>
+            <label style="display: block; color: #888; margin-bottom: 5px; font-size: 0.9em;">IP Address</label>
+            <input 
+                type="text" 
+                id="ip-filter" 
+                placeholder="e.g., 203.0.113" 
+                maxlength="15"
+                pattern="[\d.]+"
+                style="padding: 10px; border-radius: 5px; border: 1px solid #0f3460; background: #1a1a2e; color: #fff; min-width: 200px;">
+        </div>
+        
+        <button id="apply-filters" style="padding: 10px 30px; background: #0f3460; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+            Apply Filters
+        </button>
+        
+        <button id="reset-filters" style="padding: 10px 30px; background: #555; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Reset
+        </button>
+    </div>
+</div>
+
+<!-- Export Section -->
+<div style="background: #16213e; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h3 style="margin: 0;">📥 Export Data</h3>
+        <p style="color: #888; font-size: 0.9em; margin: 5px 0 0 0;">Download detected attacks</p>
+    </div>
+    <div style="display: flex; gap: 10px;">
+        <a href="/api/export/csv" download style="padding: 10px 20px; background: #27ae60; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+            Export CSV
+        </a>
+        <a href="/api/export/json" download style="padding: 10px 20px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">
+            Export JSON
+        </a>
+    </div>
+</div>
+
 <!-- Stat Cards -->
 <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
     <div class="stat-card">
@@ -23,7 +75,7 @@
 
 <!-- Attacks Table -->
 <div style="background: #16213e; padding: 25px; border-radius: 8px; margin-bottom: 30px;">
-    <h2 style="margin-bottom: 20px;">🚨 Detected Attacks</h2>
+    <h2 style="margin-bottom: 20px;">🚨 Detected Attacks <span id="attack-count" style="color: #888; font-size: 0.8em;"></span></h2>
     <div id="attacks-list">Loading...</div>
 </div>
 
@@ -111,77 +163,161 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-    // Fetch stats
-    fetch('/api/stats')
-        .then(r => r.json())
-        .then(data => {
-            document.getElementById('total-logs').textContent = data.total_logs.toLocaleString();
-            document.getElementById('total-attacks').textContent = data.total_attacks;
-            document.getElementById('unique-ips').textContent = data.unique_ips;
-            document.getElementById('time-range').textContent = data.time_range;
-        });
+    'use strict';
     
-    // Fetch attacks
-    fetch('/api/attacks')
-        .then(r => r.json())
-        .then(data => {
-            const list = document.getElementById('attacks-list');
-            if (data.attacks.length === 0) {
-                list.innerHTML = '<p style="color: #27ae60; font-size: 1.1em;">✅ No attacks detected - All systems secure</p>';
-            } else {
-                list.innerHTML = data.attacks.map(a => `
-                    <div class="attack-card">
-                        <div class="attack-header">
-                            <span class="attack-ip">🔴 ${a.ip}</span>
-                            <span class="badge ${a.severity.toLowerCase()}">${a.severity}</span>
+    let currentChart = null;
+    
+    // XSS Protection: Escape HTML
+    function escapeHtml(unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+    
+    // Fetch stats
+    function loadStats() {
+        fetch('/api/stats')
+            .then(r => {
+                if (!r.ok) throw new Error('Failed to load stats');
+                return r.json();
+            })
+            .then(data => {
+                document.getElementById('total-logs').textContent = escapeHtml(data.total_logs.toLocaleString());
+                document.getElementById('total-attacks').textContent = escapeHtml(data.total_attacks);
+                document.getElementById('unique-ips').textContent = escapeHtml(data.unique_ips);
+                document.getElementById('time-range').textContent = escapeHtml(data.time_range);
+            })
+            .catch(err => {
+                console.error('Error loading stats:', err);
+                document.getElementById('attacks-list').innerHTML = '<p style="color: #e74c3c;">Error loading statistics</p>';
+            });
+    }
+    
+    // Fetch attacks with filters
+    function loadAttacks() {
+        const severity = document.getElementById('severity-filter').value;
+        const ip = document.getElementById('ip-filter').value;
+        
+        // Client-side validation
+        if (ip && !/^[\d.]+$/.test(ip)) {
+            alert('Invalid IP format. Use only numbers and dots.');
+            return;
+        }
+        
+        const params = new URLSearchParams();
+        if (severity !== 'ALL') params.append('severity', severity);
+        if (ip) params.append('ip', ip);
+        
+        fetch('/api/attacks?' + params.toString())
+            .then(r => {
+                if (!r.ok) throw new Error('Failed to load attacks');
+                return r.json();
+            })
+            .then(data => {
+                const list = document.getElementById('attacks-list');
+                const count = document.getElementById('attack-count');
+                
+                count.textContent = `(${escapeHtml(data.attacks.length)} found)`;
+                
+                if (data.attacks.length === 0) {
+                    list.innerHTML = '<p style="color: #888; font-size: 1.1em;">No attacks match the current filters</p>';
+                } else {
+                    list.innerHTML = data.attacks.map(a => `
+                        <div class="attack-card">
+                            <div class="attack-header">
+                                <span class="attack-ip">🔴 ${escapeHtml(a.ip)}</span>
+                                <span class="badge ${escapeHtml(a.severity.toLowerCase())}">${escapeHtml(a.severity)}</span>
+                            </div>
+                            <div class="attack-details">
+                                <strong>Attempts:</strong> ${escapeHtml(a.attempts)} failed authentication requests<br>
+                                <strong>Endpoints:</strong> ${escapeHtml(a.endpoints)}<br>
+                                <strong>First seen:</strong> ${escapeHtml(new Date(a.first_seen).toLocaleString())}<br>
+                                <strong>Last seen:</strong> ${escapeHtml(new Date(a.last_seen).toLocaleString())}
+                            </div>
                         </div>
-                        <div class="attack-details">
-                            <strong>Attempts:</strong> ${a.attempts} failed authentication requests<br>
-                            <strong>Endpoints:</strong> ${a.endpoints}<br>
-                            <strong>First seen:</strong> ${new Date(a.first_seen).toLocaleString()}<br>
-                            <strong>Last seen:</strong> ${new Date(a.last_seen).toLocaleString()}
-                        </div>
-                    </div>
-                `).join('');
-            }
-        });
+                    `).join('');
+                }
+                
+                // Update chart
+                loadChart();
+            })
+            .catch(err => {
+                console.error('Error loading attacks:', err);
+                document.getElementById('attacks-list').innerHTML = '<p style="color: #e74c3c;">Error loading attacks</p>';
+            });
+    }
     
     // Fetch chart data
-    fetch('/api/timeline')
-        .then(r => r.json())
-        .then(data => {
-            const ctx = document.getElementById('attacksChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.labels,
-                    datasets: [{
-                        label: 'Attack Attempts',
-                        data: data.data,
-                        backgroundColor: '#e74c3c',
-                        borderColor: '#c0392b',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { display: false }
+    function loadChart() {
+        fetch('/api/timeline')
+            .then(r => {
+                if (!r.ok) throw new Error('Failed to load timeline');
+                return r.json();
+            })
+            .then(data => {
+                const ctx = document.getElementById('attacksChart').getContext('2d');
+                
+                // Destroy old chart if exists
+                if (currentChart) {
+                    currentChart.destroy();
+                }
+                
+                currentChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: data.labels.map(l => escapeHtml(l)),
+                        datasets: [{
+                            label: 'Attack Attempts',
+                            data: data.data,
+                            backgroundColor: '#e74c3c',
+                            borderColor: '#c0392b',
+                            borderWidth: 1
+                        }]
                     },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: { color: '#888' },
-                            grid: { color: '#2c3e50' }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        plugins: {
+                            legend: { display: false }
                         },
-                        x: {
-                            ticks: { color: '#888' },
-                            grid: { color: '#2c3e50' }
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { color: '#888' },
+                                grid: { color: '#2c3e50' }
+                            },
+                            x: {
+                                ticks: { color: '#888' },
+                                grid: { color: '#2c3e50' }
+                            }
                         }
                     }
-                }
+                });
+            })
+            .catch(err => {
+                console.error('Error loading chart:', err);
             });
-        });
+    }
+    
+    // Event listeners
+    document.getElementById('apply-filters').addEventListener('click', loadAttacks);
+    document.getElementById('reset-filters').addEventListener('click', () => {
+        document.getElementById('severity-filter').value = 'ALL';
+        document.getElementById('ip-filter').value = '';
+        loadAttacks();
+    });
+    
+    // Input validation on IP filter
+    document.getElementById('ip-filter').addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/[^\d.]/g, '');
+    });
+    
+    // Load on page load
+    loadStats();
+    loadAttacks();
 </script>
 {% endblock %}
