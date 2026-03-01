@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Git
+.git/
+.gitignore
+
+# Project specific
+phoneinfoga/
+*.log
+.pytest_cache/
+htmlcov/
+.coverage
+.tox/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+PROGRESS.md
+docs/
+
+# Other
+*.md
+!requirements.txt
