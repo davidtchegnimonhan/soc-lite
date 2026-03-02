@@ -144,4 +144,4 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for:
 
 - 📖 [Documentation](https://github.com/davidtchegnimonhan/soc-lite/wiki)
 - 🐛 [Issues](https://github.com/davidtchegnimonhan/soc-lite/issues)
-- 📧 Email: david.tchegnimonhan@example.com
+- 📧 Email: david.tchegnimonhan@epitech.eu
