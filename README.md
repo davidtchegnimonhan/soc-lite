@@ -8,8 +8,6 @@
 
 **SOC-Lite** is an open-source Security Information and Event Management (SIEM) alternative designed for small and medium enterprises. It provides enterprise-level threat detection without the complexity and cost of traditional solutions.
 
-![Dashboard Preview](docs/images/dashboard.png)
-
 ## ✨ Features
 
 - 🔍 **Real-time Log Analysis** - Parse Apache/Nginx logs instantly
