@@ -41,7 +41,7 @@
 ## Week Summaries
 *To be filled as we progress*
 
-## Day 2 - [Date aujourd'hui]
+## Day 2
 
 ### ✅ Completed Today
 - [x] Added 5 edge case tests (11 total)
@@ -56,7 +56,7 @@
 - **Tests**: 11/11 passing ✅
 - **Coverage**: 73%
 - **Commits today**: 3+
-- **Benchmark**: [X,XXX logs/sec]
+- **Benchmark**
 
 ### 💡 What I Learned
 - Sliding window algorithm for temporal pattern detection
