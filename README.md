@@ -216,9 +216,8 @@ Need help deploying SOC-Lite for your organization?
 
 ### Contact
 
-📧 Email: david.tchegnimonhan@example.com  
-💼 LinkedIn: [Your LinkedIn]  
-🌐 Website: [Your Website]
+📧 Email: david.tchegnimonhan@epitech.eu  
+💼 LinkedIn: www.linkedin.com/in/david-tchegnimonhan  
 
 ## 🗺️ Roadmap
 
