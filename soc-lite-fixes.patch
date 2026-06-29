@@ -1,0 +1,303 @@
+diff --git a/.gitignore b/.gitignore
+index 2c06de5..575bf4d 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -216,3 +216,4 @@ __marimo__/
+ \#*\#
+ phoneinfoga/
+ phoneinfoga/
++dashboard/alert_statuses.json
+diff --git a/dashboard/app.py b/dashboard/app.py
+index dbcf4f4..fcc61ae 100644
+--- a/dashboard/app.py
++++ b/dashboard/app.py
+@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ 
+ from parser.apache_parser import ApacheLogParser
+ from detection.brute_force_detector import detect_brute_force, get_summary
++from dashboard.alert_status import make_alert_id, get_status, set_status, get_all_statuses, VALID_STATUSES
+ 
+ 
+ app = Flask(__name__)
+@@ -64,7 +65,7 @@ def set_security_headers(response):
+     # CSP
+     response.headers['Content-Security-Policy'] = (
+         "default-src 'self'; "
+-        "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
++        "script-src 'self' 'unsafe-inline'; "
+         "style-src 'self' 'unsafe-inline'; "
+         "img-src 'self' data:; "
+         "font-src 'self';"
+@@ -158,18 +159,39 @@ def api_attacks():
+     # Convert to list (data already sanitized from detection)
+     attacks = []
+     for _, row in filtered_df.iterrows():
++        alert_id = make_alert_id(str(row['ip']), str(row['first_seen']))
+         attacks.append({
++            'id': alert_id,
+             'ip': str(row['ip']),  # Ensure string
+             'attempts': int(row['attempts']),
+             'severity': str(row['severity']),
+             'endpoints': str(row['endpoints']),
+             'first_seen': str(row['first_seen']),
+-            'last_seen': str(row['last_seen'])
++            'last_seen': str(row['last_seen']),
++            'status': get_status(alert_id)
+         })
+     
+     return jsonify({'attacks': attacks})
+ 
+ 
++@app.route('/api/attacks/<alert_id>/status', methods=['PATCH'])
++@rate_limit(max_calls=30, period=60)
++def update_attack_status(alert_id):
++    """Met à jour le statut de suivi d'une alerte (new / reviewed / resolved)"""
++    # Validation stricte de l'ID (12 caractères hexadécimaux générés par make_alert_id)
++    if not re.fullmatch(r'[a-f0-9]{12}', alert_id):
++        return jsonify({'error': 'Invalid alert id'}), 400
++
++    data = request.get_json(silent=True) or {}
++    new_status = data.get('status', '')
++
++    if new_status not in VALID_STATUSES:
++        return jsonify({'error': f'Invalid status. Must be one of: {VALID_STATUSES}'}), 400
++
++    set_status(alert_id, new_status)
++    return jsonify({'id': alert_id, 'status': new_status})
++
++
+ @app.route('/api/timeline')
+ @rate_limit(max_calls=30, period=60)
+ def api_timeline():
+@@ -274,4 +296,6 @@ if __name__ == '__main__':
+     print("- Add authentication")
+     print("- Use production WSGI server (gunicorn)")
+     print("=" * 40)
+-    app.run(debug=True, host='0.0.0.0', port=5000)
++    import os
++    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
++    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
+diff --git a/dashboard/templates/base.html b/dashboard/templates/base.html
+index cedc94e..886718e 100644
+--- a/dashboard/templates/base.html
++++ b/dashboard/templates/base.html
+@@ -16,7 +16,7 @@
+ <body>
+     <div class="container">
+         <header>
+-            <h1>🛡️ SOC-Lite</h1>
++            <h1><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-4px; margin-right:6px;"><path d="M12 2 4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3z"/></svg>SOC-Lite</h1>
+             <p class="tagline">Lightweight SIEM for SMEs</p>
+         </header>
+         {% block content %}{% endblock %}
+diff --git a/dashboard/templates/dashboard.html b/dashboard/templates/dashboard.html
+index 613e1a7..bb30ef2 100644
+--- a/dashboard/templates/dashboard.html
++++ b/dashboard/templates/dashboard.html
+@@ -3,7 +3,7 @@
+ {% block content %}
+ <!-- Filters Section -->
+ <div style="background: #16213e; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+-    <h2 style="margin-bottom: 15px;">🔍 Filters</h2>
++    <h2 style="margin-bottom: 15px; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Filters</h2>
+     <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: end;">
+         <div>
+             <label style="display: block; color: #888; margin-bottom: 5px; font-size: 0.9em;">Severity</label>
+@@ -40,7 +40,7 @@
+ <!-- Export Section -->
+ <div style="background: #16213e; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center;">
+     <div>
+-        <h3 style="margin: 0;">📥 Export Data</h3>
++        <h3 style="margin: 0; display:flex; align-items:center; gap:8px;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 19h16"/></svg>Export Data</h3>
+         <p style="color: #888; font-size: 0.9em; margin: 5px 0 0 0;">Download detected attacks</p>
+     </div>
+     <div style="display: flex; gap: 10px;">
+@@ -75,13 +75,13 @@
+ 
+ <!-- Attacks Table -->
+ <div style="background: #16213e; padding: 25px; border-radius: 8px; margin-bottom: 30px;">
+-    <h2 style="margin-bottom: 20px;">🚨 Detected Attacks <span id="attack-count" style="color: #888; font-size: 0.8em;"></span></h2>
++    <h2 style="margin-bottom: 20px; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M10.3 3.86 1.8 18a1.5 1.5 0 0 0 1.3 2.25h17.8a1.5 1.5 0 0 0 1.3-2.25L13.7 3.86a1.5 1.5 0 0 0-2.6 0z"/></svg>Detected Attacks <span id="attack-count" style="color: #888; font-size: 0.8em;"></span></h2>
+     <div id="attacks-list">Loading...</div>
+ </div>
+ 
+ <!-- Chart -->
+ <div style="background: #16213e; padding: 25px; border-radius: 8px;">
+-    <h2 style="margin-bottom: 20px;">📊 Attacks by IP</h2>
++    <h2 style="margin-bottom: 20px; display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19V10m6 9V4m6 15v-7"/></svg>Attacks by IP</h2>
+     <canvas id="attacksChart" style="max-height: 300px;"></canvas>
+ </div>
+ 
+@@ -135,6 +135,42 @@
+         font-size: 1.3em;
+         font-weight: bold;
+         color: #fff;
++        display: flex;
++        align-items: center;
++        gap: 8px;
++    }
++
++    .status-dot {
++        display: inline-block;
++        width: 10px;
++        height: 10px;
++        border-radius: 50%;
++        background: #e74c3c;
++    }
++
++    .attack-status-row {
++        margin-top: 12px;
++        padding-top: 12px;
++        border-top: 1px solid #2a2a4a;
++        display: flex;
++        align-items: center;
++        gap: 10px;
++        font-size: 0.9em;
++        color: #aaa;
++    }
++
++    .status-select {
++        background: #0f0f23;
++        color: #fff;
++        border: 1px solid #2a2a4a;
++        border-radius: 4px;
++        padding: 4px 8px;
++        margin-left: 6px;
++    }
++
++    .status-saved-msg {
++        color: #27ae60;
++        font-size: 0.85em;
+     }
+     
+     .badge {
+@@ -161,7 +197,7 @@
+     }
+ </style>
+ 
+-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
++<script src="{{ url_for('static', filename='js/chart.umd.min.js') }}"></script>
+ <script>
+     'use strict';
+     
+@@ -227,9 +263,9 @@
+                     list.innerHTML = '<p style="color: #888; font-size: 1.1em;">No attacks match the current filters</p>';
+                 } else {
+                     list.innerHTML = data.attacks.map(a => `
+-                        <div class="attack-card">
++                        <div class="attack-card" data-alert-id="${escapeHtml(a.id)}">
+                             <div class="attack-header">
+-                                <span class="attack-ip">🔴 ${escapeHtml(a.ip)}</span>
++                                <span class="attack-ip"><span class="status-dot"></span>${escapeHtml(a.ip)}</span>
+                                 <span class="badge ${escapeHtml(a.severity.toLowerCase())}">${escapeHtml(a.severity)}</span>
+                             </div>
+                             <div class="attack-details">
+@@ -238,8 +274,25 @@
+                                 <strong>First seen:</strong> ${escapeHtml(new Date(a.first_seen).toLocaleString())}<br>
+                                 <strong>Last seen:</strong> ${escapeHtml(new Date(a.last_seen).toLocaleString())}
+                             </div>
++                            <div class="attack-status-row">
++                                <label>Status:
++                                    <select class="status-select" data-alert-id="${escapeHtml(a.id)}">
++                                        <option value="new" ${a.status === 'new' ? 'selected' : ''}>New</option>
++                                        <option value="reviewed" ${a.status === 'reviewed' ? 'selected' : ''}>Reviewed</option>
++                                        <option value="resolved" ${a.status === 'resolved' ? 'selected' : ''}>Resolved</option>
++                                    </select>
++                                </label>
++                                <span class="status-saved-msg" id="saved-${escapeHtml(a.id)}"></span>
++                            </div>
+                         </div>
+                     `).join('');
++
++                    // Attacher les listeners de changement de statut
++                    document.querySelectorAll('.status-select').forEach(sel => {
++                        sel.addEventListener('change', (e) => {
++                            updateAlertStatus(e.target.dataset.alertId, e.target.value);
++                        });
++                    });
+                 }
+                 
+                 // Update chart
+@@ -252,6 +305,30 @@
+     }
+     
+     // Fetch chart data
++    function updateAlertStatus(alertId, newStatus) {
++        fetch(`/api/attacks/${alertId}/status`, {
++            method: 'PATCH',
++            headers: { 'Content-Type': 'application/json' },
++            body: JSON.stringify({ status: newStatus })
++        })
++        .then(r => {
++            if (!r.ok) throw new Error('Failed to update status');
++            return r.json();
++        })
++        .then(() => {
++            const msg = document.getElementById(`saved-${alertId}`);
++            if (msg) {
++                msg.textContent = 'Saved';
++                setTimeout(() => { msg.textContent = ''; }, 2000);
++            }
++        })
++        .catch(err => {
++            console.error('Error updating status:', err);
++            const msg = document.getElementById(`saved-${alertId}`);
++            if (msg) msg.textContent = 'Error saving';
++        });
++    }
++
+     function loadChart() {
+         fetch('/api/timeline')
+             .then(r => {
+diff --git a/install.sh b/install.sh
+index a1d7c19..b0d4c5e 100755
+--- a/install.sh
++++ b/install.sh
+@@ -14,10 +14,10 @@ echo "║   Lightweight SIEM for SMEs          ║"
+ echo "╚═══════════════════════════════════════╝"
+ echo -e "${NC}"
+ 
+-# Check if running as root
+-if [ "$EUID" -eq 0 ]; then 
+-   echo -e "${RED}Please do not run as root${NC}"
+-   exit 1
++# Detect if running as root (common on fresh VPS, just warn)
++if [ "$EUID" -eq 0 ]; then
++   echo -e "${YELLOW}⚠️  Running as root. This is common on fresh VPS instances.${NC}"
++   echo -e "${YELLOW}   Continuing installation...${NC}"
+ fi
+ 
+ # Detect OS
+@@ -29,14 +29,21 @@ fi
+ 
+ echo -e "${YELLOW}Detected OS: $OS${NC}"
+ 
++# Use sudo only if not already root (sudo may not exist on minimal/root systems)
++if [ "$EUID" -eq 0 ]; then
++    SUDO=""
++else
++    SUDO="sudo"
++fi
++
+ # Install dependencies
+ echo -e "${YELLOW}Installing dependencies...${NC}"
+ 
+ if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
+-    sudo apt-get update
+-    sudo apt-get install -y python3 python3-pip python3-venv git
++    $SUDO apt-get update
++    $SUDO apt-get install -y python3 python3-pip python3-venv git
+ elif [ "$OS" = "centos" ] || [ "$OS" = "rhel" ]; then
+-    sudo yum install -y python3 python3-pip git
++    $SUDO yum install -y python3 python3-pip git
+ elif [ "$OS" = "darwin" ]; then
+     # macOS
+     if ! command -v brew &> /dev/null; then
+@@ -97,6 +104,6 @@ echo -e "  python dashboard/app.py"
+ echo ""
+ echo -e "${GREEN}Then open:${NC} http://localhost:5000"
+ echo ""
+-echo -e "${YELLOW}For production deployment, see:${NC} docs/deployment.md"
++echo -e "${YELLOW}For more details, see:${NC} docs/INSTALLATION.md"
+ echo ""
+ echo -e "${GREEN}Need help? david.tchegnimonhan@example.com${NC}"

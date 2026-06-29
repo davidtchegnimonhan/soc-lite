@@ -14,10 +14,10 @@ echo "║   Lightweight SIEM for SMEs          ║"
 echo "╚═══════════════════════════════════════╝"
 echo -e "${NC}"
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then 
-   echo -e "${RED}Please do not run as root${NC}"
-   exit 1
+# Detect if running as root (common on fresh VPS, just warn)
+if [ "$EUID" -eq 0 ]; then
+   echo -e "${YELLOW}⚠️  Running as root. This is common on fresh VPS instances.${NC}"
+   echo -e "${YELLOW}   Continuing installation...${NC}"
 fi
 
 # Detect OS
@@ -29,14 +29,21 @@ fi
 
 echo -e "${YELLOW}Detected OS: $OS${NC}"
 
+# Use sudo only if not already root (sudo may not exist on minimal/root systems)
+if [ "$EUID" -eq 0 ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+
 # Install dependencies
 echo -e "${YELLOW}Installing dependencies...${NC}"
 
 if [ "$OS" = "ubuntu" ] || [ "$OS" = "debian" ]; then
-    sudo apt-get update
-    sudo apt-get install -y python3 python3-pip python3-venv git
+    $SUDO apt-get update
+    $SUDO apt-get install -y python3 python3-pip python3-venv git
 elif [ "$OS" = "centos" ] || [ "$OS" = "rhel" ]; then
-    sudo yum install -y python3 python3-pip git
+    $SUDO yum install -y python3 python3-pip git
 elif [ "$OS" = "darwin" ]; then
     # macOS
     if ! command -v brew &> /dev/null; then
@@ -49,13 +56,16 @@ else
     exit 1
 fi
 
-# Clone repository
-echo -e "${YELLOW}Cloning SOC-Lite...${NC}"
-if [ -d "soc-lite" ]; then
+# Clone repository (skip if already running from inside an existing clone)
+if [ -f "main.py" ] && [ -d "dashboard" ] && [ -d "parser" ]; then
+    echo -e "${YELLOW}Already inside a SOC-Lite directory. Skipping clone.${NC}"
+elif [ -d "soc-lite" ]; then
+    echo -e "${YELLOW}Cloning SOC-Lite...${NC}"
     echo -e "${YELLOW}Directory exists. Updating...${NC}"
     cd soc-lite
     git pull
 else
+    echo -e "${YELLOW}Cloning SOC-Lite...${NC}"
     git clone https://github.com/davidtchegnimonhan/soc-lite.git
     cd soc-lite
 fi
@@ -69,6 +79,7 @@ source venv/bin/activate
 echo -e "${YELLOW}Installing Python packages...${NC}"
 pip install --upgrade pip
 pip install -r requirements.txt
+pip install pytest
 
 # Create data directories
 mkdir -p data logs
@@ -79,9 +90,10 @@ if [ ! -f "data/attack_dataset.log" ]; then
     python utils/attack_injector.py
 fi
 
-# Run tests
+# Run tests (use 'python -m pytest' to guarantee the venv's interpreter
+# and installed packages are used, not a global system pytest)
 echo -e "${YELLOW}Running tests...${NC}"
-pytest tests/ -v || echo -e "${RED}Some tests failed, but installation continues...${NC}"
+python -m pytest tests/ -v || echo -e "${RED}Some tests failed, but installation continues...${NC}"
 
 echo -e "${GREEN}"
 echo "╔═══════════════════════════════════════╗"
@@ -97,6 +109,6 @@ echo -e "  python dashboard/app.py"
 echo ""
 echo -e "${GREEN}Then open:${NC} http://localhost:5000"
 echo ""
-echo -e "${YELLOW}For production deployment, see:${NC} docs/deployment.md"
+echo -e "${YELLOW}For more details, see:${NC} docs/INSTALLATION.md"
 echo ""
-echo -e "${GREEN}Need help? david.tchegnimonhan@example.com${NC}"
+echo -e "${GREEN}Need help? for.help.it.s@gmail.com${NC}"

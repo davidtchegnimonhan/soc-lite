@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from parser.apache_parser import ApacheLogParser
 from detection.brute_force_detector import detect_brute_force, get_summary
+from dashboard.alert_status import make_alert_id, get_status, set_status, get_all_statuses, VALID_STATUSES
 
 
 app = Flask(__name__)
@@ -158,16 +159,37 @@ def api_attacks():
     # Convert to list (data already sanitized from detection)
     attacks = []
     for _, row in filtered_df.iterrows():
+        alert_id = make_alert_id(str(row['ip']), str(row['first_seen']))
         attacks.append({
+            'id': alert_id,
             'ip': str(row['ip']),  # Ensure string
             'attempts': int(row['attempts']),
             'severity': str(row['severity']),
             'endpoints': str(row['endpoints']),
             'first_seen': str(row['first_seen']),
-            'last_seen': str(row['last_seen'])
+            'last_seen': str(row['last_seen']),
+            'status': get_status(alert_id)
         })
     
     return jsonify({'attacks': attacks})
+
+
+@app.route('/api/attacks/<alert_id>/status', methods=['PATCH'])
+@rate_limit(max_calls=30, period=60)
+def update_attack_status(alert_id):
+    """Met à jour le statut de suivi d'une alerte (new / reviewed / resolved)"""
+    # Validation stricte de l'ID (12 caractères hexadécimaux générés par make_alert_id)
+    if not re.fullmatch(r'[a-f0-9]{12}', alert_id):
+        return jsonify({'error': 'Invalid alert id'}), 400
+
+    data = request.get_json(silent=True) or {}
+    new_status = data.get('status', '')
+
+    if new_status not in VALID_STATUSES:
+        return jsonify({'error': f'Invalid status. Must be one of: {VALID_STATUSES}'}), 400
+
+    set_status(alert_id, new_status)
+    return jsonify({'id': alert_id, 'status': new_status})
 
 
 @app.route('/api/timeline')
@@ -274,4 +296,6 @@ if __name__ == '__main__':
     print("- Add authentication")
     print("- Use production WSGI server (gunicorn)")
     print("=" * 40)
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    import os
+    debug_mode = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
